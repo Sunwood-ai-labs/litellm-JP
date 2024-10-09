@@ -105,7 +105,6 @@ from litellm.proxy._types import (
     UpdateUserRequest,
     UserAPIKeyAuth,
 )
-from litellm.proxy.utils import DBClient
 
 proxy_logging_obj = ProxyLogging(user_api_key_cache=DualCache())
 
@@ -128,13 +127,12 @@ def prisma_client():
     modified_url = append_query_params(database_url, params)
     os.environ["DATABASE_URL"] = modified_url
 
-    # Assuming DBClient is a class that needs to be instantiated
+    # Assuming PrismaClient is a class that needs to be instantiated
     prisma_client = PrismaClient(
         database_url=os.environ["DATABASE_URL"], proxy_logging_obj=proxy_logging_obj
     )
 
     # Reset litellm.proxy.proxy_server.prisma_client to None
-    litellm.proxy.proxy_server.custom_db_client = None
     litellm.proxy.proxy_server.litellm_proxy_budget_name = (
         f"litellm-proxy-budget-{time.time()}"
     )
@@ -242,24 +240,24 @@ def test_generate_and_call_with_valid_key(prisma_client, api_route):
             await litellm.proxy.proxy_server.prisma_client.connect()
             from litellm.proxy.proxy_server import user_api_key_cache
 
-            request = NewUserRequest(user_role=LitellmUserRoles.INTERNAL_USER)
-            key = await new_user(
-                request,
-                user_api_key_dict=UserAPIKeyAuth(
-                    user_role=LitellmUserRoles.PROXY_ADMIN,
-                    api_key="sk-1234",
-                    user_id="1234",
-                ),
+            user_api_key_dict = UserAPIKeyAuth(
+                user_role=LitellmUserRoles.PROXY_ADMIN,
+                api_key="sk-1234",
+                user_id="1234",
             )
+            request = NewUserRequest(user_role=LitellmUserRoles.INTERNAL_USER)
+            key = await new_user(request, user_api_key_dict=user_api_key_dict)
             print(key)
             user_id = key.user_id
 
             # check /user/info to verify user_role was set correctly
-            new_user_info = await user_info(user_id=user_id)
+            new_user_info = await user_info(
+                user_id=user_id, user_api_key_dict=user_api_key_dict
+            )
             new_user_info = new_user_info.user_info
             print("new_user_info=", new_user_info)
-            assert new_user_info.user_role == LitellmUserRoles.INTERNAL_USER
-            assert new_user_info.user_id == user_id
+            assert new_user_info["user_role"] == LitellmUserRoles.INTERNAL_USER
+            assert new_user_info["user_id"] == user_id
 
             generated_key = key.key
             bearer_token = "Bearer " + generated_key
@@ -2363,7 +2361,7 @@ async def test_proxy_load_test_db(prisma_client):
             print(f"len responses: {len(spend_logs)}")
             assert len(spend_logs) == n
             print(n, time.time() - start_time, len(spend_logs))
-        except:
+        except Exception:
             print(n, time.time() - start_time, 0)
         raise Exception(f"it worked! key={key.key}")
     except Exception as e:

@@ -4,6 +4,7 @@ import copy
 import inspect
 import os
 import traceback
+from typing import Optional
 
 from packaging.version import Version
 from pydantic import BaseModel
@@ -12,6 +13,7 @@ import litellm
 from litellm._logging import verbose_logger
 from litellm.litellm_core_utils.redact_messages import redact_user_api_key_info
 from litellm.secret_managers.main import str_to_bool
+from litellm.types.utils import StandardLoggingPayload
 
 
 class LangFuseLogger:
@@ -67,7 +69,7 @@ class LangFuseLogger:
         try:
             project_id = self.Langfuse.client.projects.get().data[0].id
             os.environ["LANGFUSE_PROJECT_ID"] = project_id
-        except:
+        except Exception:
             project_id = None
 
         if os.getenv("UPSTREAM_LANGFUSE_SECRET_KEY") is not None:
@@ -184,7 +186,7 @@ class LangFuseLogger:
                 if not isinstance(value, (str, int, bool, float)):
                     try:
                         optional_params[param] = str(value)
-                    except:
+                    except Exception:
                         # if casting value to str fails don't block logging
                         pass
 
@@ -275,7 +277,7 @@ class LangFuseLogger:
             print_verbose(
                 f"Langfuse Layer Logging - final response object: {response_obj}"
             )
-            verbose_logger.info(f"Langfuse Layer Logging - logging success")
+            verbose_logger.info("Langfuse Layer Logging - logging success")
 
             return {"trace_id": trace_id, "generation_id": generation_id}
         except Exception as e:
@@ -492,7 +494,7 @@ class LangFuseLogger:
                         output if not mask_output else "redacted-by-litellm"
                     )
 
-            if debug == True or (isinstance(debug, str) and debug.lower() == "true"):
+            if debug is True or (isinstance(debug, str) and debug.lower() == "true"):
                 if "metadata" in trace_params:
                     # log the raw_metadata in the trace
                     trace_params["metadata"]["metadata_passed_to_litellm"] = metadata
@@ -502,7 +504,15 @@ class LangFuseLogger:
             cost = kwargs.get("response_cost", None)
             print_verbose(f"trace: {cost}")
 
+            standard_logging_object: Optional[StandardLoggingPayload] = kwargs.get(
+                "standard_logging_object", None
+            )
+
             clean_metadata["litellm_response_cost"] = cost
+            if standard_logging_object is not None:
+                clean_metadata["hidden_params"] = standard_logging_object[
+                    "hidden_params"
+                ]
 
             if (
                 litellm.langfuse_default_tags is not None
@@ -535,8 +545,8 @@ class LangFuseLogger:
 
             proxy_server_request = litellm_params.get("proxy_server_request", None)
             if proxy_server_request:
-                method = proxy_server_request.get("method", None)
-                url = proxy_server_request.get("url", None)
+                proxy_server_request.get("method", None)
+                proxy_server_request.get("url", None)
                 headers = proxy_server_request.get("headers", None)
                 clean_headers = {}
                 if headers:
@@ -625,7 +635,7 @@ class LangFuseLogger:
             generation_client = trace.generation(**generation_params)
 
             return generation_client.trace_id, generation_id
-        except Exception as e:
+        except Exception:
             verbose_logger.error(f"Langfuse Layer Error - {traceback.format_exc()}")
             return None, None
 

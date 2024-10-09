@@ -4019,7 +4019,7 @@ def test_async_text_completion():
     asyncio.run(test_get_response())
 
 
-@pytest.mark.skip(reason="Skip flaky tgai test")
+@pytest.mark.flaky(retries=6, delay=1)
 def test_async_text_completion_together_ai():
     litellm.set_verbose = True
     print("test_async_text_completion")
@@ -4032,6 +4032,8 @@ def test_async_text_completion_together_ai():
                 max_tokens=10,
             )
             print(f"response: {response}")
+        except litellm.RateLimitError as e:
+            print(e)
         except litellm.Timeout as e:
             print(e)
         except Exception as e:
@@ -4114,7 +4116,7 @@ async def test_async_text_completion_chat_model_stream():
 async def test_completion_codestral_fim_api(model):
     try:
         if model == "vertex_ai/codestral@2405":
-            from tests.local_testing.test_amazing_vertex_completion import (
+            from test_amazing_vertex_completion import (
                 load_vertex_ai_credentials,
             )
 
@@ -4158,7 +4160,7 @@ async def test_completion_codestral_fim_api(model):
 async def test_completion_codestral_fim_api_stream(model):
     try:
         if model == "vertex_ai/codestral@2405":
-            from tests.local_testing.test_amazing_vertex_completion import (
+            from test_amazing_vertex_completion import (
                 load_vertex_ai_credentials,
             )
 
@@ -4221,7 +4223,8 @@ def mock_post(*args, **kwargs):
     return mock_response
 
 
-def test_completion_vllm():
+@pytest.mark.parametrize("provider", ["openai", "hosted_vllm"])
+def test_completion_vllm(provider):
     """
     Asserts a text completion call for vllm actually goes to the text completion endpoint
     """
@@ -4233,7 +4236,10 @@ def test_completion_vllm():
         client.completions.with_raw_response, "create", side_effect=mock_post
     ) as mock_call:
         response = text_completion(
-            model="openai/gemini-1.5-flash", prompt="ping", client=client, hello="world"
+            model="{provider}/gemini-1.5-flash".format(provider=provider),
+            prompt="ping",
+            client=client,
+            hello="world",
         )
         print("raw response", response)
 
