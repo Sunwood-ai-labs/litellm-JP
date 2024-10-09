@@ -56,5 +56,9 @@ volumes:
   prometheus_data:
     driver: local
 
+# memo
+#
+# docker-compose exec litellm /bin/bash
+# python db_scripts/create_views.py
 
 # ...rest of your docker-compose config if any
